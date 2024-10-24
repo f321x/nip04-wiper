@@ -1,4 +1,5 @@
 use nostr_sdk::prelude::*;
+use tokio::time::timeout;
 use std::{collections::HashSet, env, time::Duration};
 
 // this was a 30 min tool hack, don't expect much, but it works
@@ -30,23 +31,29 @@ async fn main() {
 	let mut notifications = client.notifications();
     let mut nip04dms: HashSet<EventId> = HashSet::new();
 
+    println!("Fetching events, this can take some time.");
     loop {
-        let notification = notifications.recv().await;
-            match notification {
-            Ok(notification) => {
+        let notification = timeout(Duration::from_secs(30), notifications.recv()).await;
+        match notification {
+            Ok(Ok(notification)) => {
                 if let RelayPoolNotification::Event { event, .. } = notification {
                     println!("Found nip04 event: {} ", event.id);
                     nip04dms.insert(event.id);
                 }
             }
-            _ => break,
+            Ok(Err(_)) => break,
+            Err(_) => {
+                println!("Timeout reached, stopping the loop.");
+                break;
+            }
         }
     }
+    client.unsubscribe_all().await;
     println!("Found {} nip04 dms", nip04dms.len());
 
-    let delete_event = EventBuilder::delete_with_reason(nip04dms, "github.com/f321x/nip04-wiper".to_string());
-    client.send_event_builder(delete_event).await.unwrap();
-    println!("Sent delete event, done.");
+    let delete_event = EventBuilder::delete_with_reason(nip04dms, "github.com/f321x/nip04-wiper".to_string()).to_event(&keys).unwrap();
+    client.send_event(delete_event.clone()).await.unwrap();
+    println!("Sent delete event {:#?}, done.", delete_event.id());
 }
 
 async fn add_relays(client: &Client) {
