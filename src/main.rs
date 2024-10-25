@@ -33,7 +33,7 @@ async fn main() {
 
     println!("Fetching events, this can take some time.");
     loop {
-        let notification = timeout(Duration::from_secs(30), notifications.recv()).await;
+        let notification = timeout(Duration::from_secs(60), notifications.recv()).await;
         match notification {
             Ok(Ok(notification)) => {
                 if let RelayPoolNotification::Event { event, .. } = notification {
@@ -52,7 +52,9 @@ async fn main() {
     println!("Found {} nip04 dms", nip04dms.len());
 
     let delete_event = EventBuilder::delete_with_reason(nip04dms, "github.com/f321x/nip04-wiper".to_string()).to_event(&keys).unwrap();
+    println!("Sending delete event...");
     client.send_event(delete_event.clone()).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(10)).await;
     println!("Sent delete event {:#?}, done.", delete_event.id());
 }
 
